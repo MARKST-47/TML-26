@@ -110,6 +110,7 @@ shadow_2.to(device)
 shadow_2.eval()
 
 print("Calculating RMIA scores...")
+priv_ds.membership = [-1] * len(priv_ds)  # Replace None with -1
 loader = torch.utils.data.DataLoader(priv_ds, batch_size=256, shuffle=False)
 
 all_ids = []
@@ -174,16 +175,12 @@ if not submit_path.exists():
 
 try:
     with open(submit_path, "rb") as f:
-        # resp = requests.post(
-        #     f"{BASE_URL}/submit/{TASK_ID}",
-        #     headers={"X-API-Key": API_KEY},
-        #     files={"file": (submit_path.name, f, "application/csv")},
-        #     timeout=(10, 600),
-        # )
-        print(
-            "DRY RUN COMPLETE: submission.csv generated locally. Exiting before upload."
+        resp = requests.post(
+            f"{BASE_URL}/submit/{TASK_ID}",
+            headers={"X-API-Key": API_KEY},
+            files={"file": (submit_path.name, f, "application/csv")},
+            timeout=(10, 600),
         )
-        sys.exit(0)
     try:
         body = resp.json()
     except Exception:
