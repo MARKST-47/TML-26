@@ -22,7 +22,7 @@ MODEL_PATH = BASE / "model.pt"
 OUTPUT_CSV = BASE / "submission.csv"
 
 BASE_URL = "http://34.63.153.158"  # DONOT CHANGE
-API_KEY = "team_LXIV 14cdd947fec2bbe735ed8001c9154ce6"
+API_KEY = "14cdd947fec2bbe735ed8001c9154ce6"
 TASK_ID = "01-mia"  # DONOT CHANGE
 
 
