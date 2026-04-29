@@ -171,12 +171,16 @@ if not submit_path.exists():
 
 try:
     with open(submit_path, "rb") as f:
-        resp = requests.post(
-            f"{BASE_URL}/submit/{TASK_ID}",
-            headers={"X-API-Key": API_KEY},
-            files={"file": (submit_path.name, f, "application/csv")},
-            timeout=(10, 600),
+        # resp = requests.post(
+        #     f"{BASE_URL}/submit/{TASK_ID}",
+        #     headers={"X-API-Key": API_KEY},
+        #     files={"file": (submit_path.name, f, "application/csv")},
+        #     timeout=(10, 600),
+        # )
+        print(
+            "DRY RUN COMPLETE: submission.csv generated locally. Exiting before upload."
         )
+        sys.exit(0)
     try:
         body = resp.json()
     except Exception:
