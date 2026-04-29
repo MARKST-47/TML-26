@@ -89,8 +89,9 @@ def train_shadow(model_name, dataset, epochs=15):
     print(f"Saved {model_name}.pt\n")
 
 
-# Split data and train K=2 models
 if __name__ == "__main__":
-    subset_1, subset_2 = random_split(pub_ds, [0.5, 0.5])
-    train_shadow("shadow_1", subset_1)
-    train_shadow("shadow_2", subset_2)
+    num_shadows = 5
+    for i in range(1, num_shadows + 1):
+        # Create a fresh, independent 50% split for every model
+        subset, _ = random_split(pub_ds, [0.5, 0.5])
+        train_shadow(f"shadow_{i}", subset, epochs=25)
