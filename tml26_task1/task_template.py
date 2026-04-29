@@ -10,6 +10,8 @@ from pathlib import Path
 from torch.utils.data import Dataset
 from torchvision.models import resnet18
 import torchvision.transforms as transforms
+import torch.nn.functional as F
+import numpy as np
 
 
 # config
@@ -19,10 +21,9 @@ PRIV_PATH = BASE / "priv.pt"
 MODEL_PATH = BASE / "model.pt"
 OUTPUT_CSV = BASE / "submission.csv"
 
-BASE_URL = "http://34.63.153.158"   #DONOT CHANGE
-API_KEY = "YOUR_API_KEY_HERE"
-TASK_ID = "01-mia"  #DONOT CHANGE
-
+BASE_URL = "http://34.63.153.158"  # DONOT CHANGE
+API_KEY = "team_LXIV 14cdd947fec2bbe735ed8001c9154ce6"
+TASK_ID = "01-mia"  # DONOT CHANGE
 
 
 # dataset classes
@@ -65,10 +66,12 @@ priv_ds = torch.load(PRIV_PATH, weights_only=False)
 MEAN = [0.7406, 0.5331, 0.7059]
 STD = [0.1491, 0.1864, 0.1301]
 
-transform = transforms.Compose([
-    transforms.Resize(32),
-    transforms.Normalize(mean=MEAN, std=STD),
-])
+transform = transforms.Compose(
+    [
+        transforms.Resize(32),
+        transforms.Normalize(mean=MEAN, std=STD),
+    ]
+)
 
 pub_ds.transform = transform
 priv_ds.transform = transform
@@ -84,15 +87,69 @@ model.fc = torch.nn.Linear(512, 9)
 model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
 model.eval()
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+model.eval()
 
-# create random submission (remove this later or it will rewrite your actual submission)
-print("Creating random submission...")
-ids = [str(i) for i in priv_ds.ids]
+# Load Shadow Models
+print("Loading shadow models:")
+shadow_1 = resnet18(weights=None)
+shadow_1.conv1 = torch.nn.Conv2d(3, 64, 3, 1, 1, bias=False)
+shadow_1.maxpool = torch.nn.Identity()
+shadow_1.fc = torch.nn.Linear(512, 9)
+shadow_1.load_state_dict(torch.load(BASE / "shadow_1.pt", map_location=device))
+shadow_1.to(device)
+shadow_1.eval()
 
-df = pd.DataFrame({
-    "id": ids,
-    "score": [random.random() for _ in ids]
-})
+shadow_2 = resnet18(weights=None)
+shadow_2.conv1 = torch.nn.Conv2d(3, 64, 3, 1, 1, bias=False)
+shadow_2.maxpool = torch.nn.Identity()
+shadow_2.fc = torch.nn.Linear(512, 9)
+shadow_2.load_state_dict(torch.load(BASE / "shadow_2.pt", map_location=device))
+shadow_2.to(device)
+shadow_2.eval()
+
+print("Calculating RMIA scores...")
+loader = torch.utils.data.DataLoader(priv_ds, batch_size=256, shuffle=False)
+
+all_ids = []
+all_scores = []
+
+with torch.no_grad():
+    for ids, imgs, labels, _ in loader:
+        imgs, labels = imgs.to(device), labels.to(device)
+
+        # Get Target model probabilities
+        logits_target = model(imgs)
+        probs_target = F.softmax(logits_target, dim=1)
+        p_target = probs_target[torch.arange(len(labels)), labels]
+
+        # Shadow Model 1 probability
+        logits_s1 = shadow_1(imgs)
+        probs_s1 = F.softmax(logits_s1, dim=1)
+        p_s1 = probs_s1[torch.arange(len(labels)), labels]
+        # Shadow model 2 probability
+        logits_s2 = shadow_2(imgs)
+        probs_s2 = F.softmax(logits_s2, dim=1)
+        p_s2 = probs_s2[torch.arange(len(labels)), labels]
+
+        # Average Shadow Probability
+        p_shadow_avg = (p_s1 + p_s2) / 2.0
+
+        # Compute Log Ratio (RMIA Score)
+        eps = 1e-10  # Epsilon to prevent log(0)
+        score = torch.log(p_target + eps) - torch.log(p_shadow_avg + eps)
+
+        all_ids.extend(ids.tolist())
+        all_scores.extend(score.cpu().numpy().tolist())
+
+# Normalize scores to [0, 1] range as required by the submission system
+all_scores = np.array(all_scores)
+min_s, max_s = np.min(all_scores), np.max(all_scores)
+normalized_scores = (all_scores - min_s) / (max_s - min_s + 1e-8)
+
+print("Creating submission...")
+df = pd.DataFrame({"id": all_ids, "score": normalized_scores})
 
 df.to_csv(OUTPUT_CSV, index=False)
 print("Saved:", OUTPUT_CSV)
@@ -102,6 +159,7 @@ print("Saved:", OUTPUT_CSV)
 def die(msg):
     print(msg, file=sys.stderr)
     sys.exit(1)
+
 
 parser = argparse.ArgumentParser(description="Submit a CSV file to the server.")
 args = parser.parse_args()
