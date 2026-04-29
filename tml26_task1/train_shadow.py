@@ -1,12 +1,42 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, random_split, Dataset
 from torchvision.models import resnet18
 import torchvision.transforms as transforms
 from pathlib import Path
+from typing import Tuple
 
 BASE = Path(__file__).parent
+
+
+class TaskDataset(Dataset):
+    def __init__(self, transform=None):
+        self.ids = []
+        self.imgs = []
+        self.labels = []
+        self.transform = transform
+
+    def __getitem__(self, index) -> Tuple[int, torch.Tensor, int]:
+        id_ = self.ids[index]
+        img = self.imgs[index]
+        if self.transform is not None:
+            img = self.transform(img)
+        label = self.labels[index]
+        return id_, img, label
+
+    def __len__(self):
+        return len(self.ids)
+
+
+class MembershipDataset(TaskDataset):
+    def __init__(self, transform=None):
+        super().__init__(transform)
+        self.membership = []
+
+    def __getitem__(self, index) -> Tuple[int, torch.Tensor, int, int]:
+        id_, img, label = super().__getitem__(index)
+        return id_, img, label, self.membership[index]
 
 
 # Model Architecture
@@ -59,7 +89,7 @@ def train_shadow(model_name, dataset, epochs=15):
     print(f"Saved {model_name}.pt\n")
 
 
-# Splitting data and train 2 models
+# Split data and train K=2 models
 if __name__ == "__main__":
     subset_1, subset_2 = random_split(pub_ds, [0.5, 0.5])
     train_shadow("shadow_1", subset_1)
