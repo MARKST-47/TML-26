@@ -1,8 +1,8 @@
 import os
 import sys
 import torch
-import pandas as pd
 import requests
+import csv
 import random
 import argparse
 
@@ -149,9 +149,12 @@ min_s, max_s = np.min(all_scores), np.max(all_scores)
 normalized_scores = (all_scores - min_s) / (max_s - min_s + 1e-8)
 
 print("Creating submission...")
-df = pd.DataFrame({"id": all_ids, "score": normalized_scores})
+with open(OUTPUT_CSV, "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(["id", "score"])
+    for curr_id, curr_score in zip(all_ids, normalized_scores):
+        writer.writerow([curr_id, curr_score])
 
-df.to_csv(OUTPUT_CSV, index=False)
 print("Saved:", OUTPUT_CSV)
 
 
