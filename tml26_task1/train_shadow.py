@@ -63,13 +63,15 @@ pub_ds.transform = transform
 
 
 # Training Loop Function
-def train_shadow(model_name, dataset, epochs=15):
+def train_shadow(model_name, dataset, epochs=25):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = get_model().to(device)
     loader = DataLoader(dataset, batch_size=128, shuffle=True)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
+    # Add a scheduler that reduces the LR to 0 by the end of training
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
     print(f"Training {model_name}")
     for epoch in range(epochs):
@@ -83,6 +85,8 @@ def train_shadow(model_name, dataset, epochs=15):
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
+
+        scheduler.step()  # Step the scheduler every epoch
         print(f"Epoch {epoch + 1}/{epochs} | Loss: {total_loss / len(loader):.4f}")
 
     torch.save(model.state_dict(), BASE / f"{model_name}.pt")
@@ -92,6 +96,6 @@ def train_shadow(model_name, dataset, epochs=15):
 if __name__ == "__main__":
     num_shadows = 5
     for i in range(1, num_shadows + 1):
-        # Create a fresh, independent 50% split for every model
+        # Independent 50% split for every model
         subset, _ = random_split(pub_ds, [0.5, 0.5])
         train_shadow(f"shadow_{i}", subset, epochs=25)

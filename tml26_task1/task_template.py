@@ -78,7 +78,7 @@ priv_ds.transform = transform
 
 
 # load model
-print("Loading model...")
+print("Loading model.")
 model = resnet18(weights=None)
 model.conv1 = torch.nn.Conv2d(3, 64, 3, 1, 1, bias=False)
 model.maxpool = torch.nn.Identity()
@@ -91,23 +91,17 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 model.eval()
 
-# Load Shadow Models
-print("Loading shadow models:")
-shadow_1 = resnet18(weights=None)
-shadow_1.conv1 = torch.nn.Conv2d(3, 64, 3, 1, 1, bias=False)
-shadow_1.maxpool = torch.nn.Identity()
-shadow_1.fc = torch.nn.Linear(512, 9)
-shadow_1.load_state_dict(torch.load(BASE / "shadow_1.pt", map_location=device))
-shadow_1.to(device)
-shadow_1.eval()
-
-shadow_2 = resnet18(weights=None)
-shadow_2.conv1 = torch.nn.Conv2d(3, 64, 3, 1, 1, bias=False)
-shadow_2.maxpool = torch.nn.Identity()
-shadow_2.fc = torch.nn.Linear(512, 9)
-shadow_2.load_state_dict(torch.load(BASE / "shadow_2.pt", map_location=device))
-shadow_2.to(device)
-shadow_2.eval()
+print("Loading all shadow models.")
+shadows = []
+for i in range(1, 6):
+    s = resnet18(weights=None)
+    s.conv1 = torch.nn.Conv2d(3, 64, 3, 1, 1, bias=False)
+    s.maxpool = torch.nn.Identity()
+    s.fc = torch.nn.Linear(512, 9)
+    s.load_state_dict(torch.load(BASE / f"shadow_{i}.pt", map_location=device))
+    s.to(device)
+    s.eval()
+    shadows.append(s)
 
 print("Calculating RMIA scores...")
 priv_ds.membership = [-1] * len(priv_ds)  # Replace None with -1
@@ -120,31 +114,35 @@ with torch.no_grad():
     for ids, imgs, labels, _ in loader:
         imgs, labels = imgs.to(device), labels.to(device)
 
-        # Get Target model probabilities
-        logits_target = model(imgs)
-        probs_target = F.softmax(logits_target, dim=1)
-        p_target = probs_target[torch.arange(len(labels)), labels]
+        # Horizontal flipped image for Test time augmentation
+        imgs_flipped = torch.flip(imgs, dims=[3])
 
-        # Shadow Model 1 probability
-        logits_s1 = shadow_1(imgs)
-        probs_s1 = F.softmax(logits_s1, dim=1)
-        p_s1 = probs_s1[torch.arange(len(labels)), labels]
-        # Shadow model 2 probability
-        logits_s2 = shadow_2(imgs)
-        probs_s2 = F.softmax(logits_s2, dim=1)
-        p_s2 = probs_s2[torch.arange(len(labels)), labels]
+        # Target Model Probabilities (Average of original and flipped)
+        p_t_orig = F.softmax(model(imgs), dim=1)[torch.arange(len(labels)), labels]
+        p_t_flip = F.softmax(model(imgs_flipped), dim=1)[
+            torch.arange(len(labels)), labels
+        ]
+        p_target = (p_t_orig + p_t_flip) / 2.0
 
-        # Average Shadow Probability
-        p_shadow_avg = (p_s1 + p_s2) / 2.0
+        # Shadow Model Probabilities (Average across all models and flips)
+        p_shadow_sum = 0
+        for s in shadows:
+            p_s_orig = F.softmax(s(imgs), dim=1)[torch.arange(len(labels)), labels]
+            p_s_flip = F.softmax(s(imgs_flipped), dim=1)[
+                torch.arange(len(labels)), labels
+            ]
+            p_shadow_sum += (p_s_orig + p_s_flip) / 2.0
 
-        # Compute Log Ratio (RMIA Score)
-        eps = 1e-10  # Epsilon to prevent log(0)
+        p_shadow_avg = p_shadow_sum / len(shadows)
+
+        # Compute Log Ratio (RMIA Score) with larger epsilon to handle zeros
+        eps = 1e-7
         score = torch.log(p_target + eps) - torch.log(p_shadow_avg + eps)
 
         all_ids.extend(ids.tolist())
         all_scores.extend(score.cpu().numpy().tolist())
 
-# Normalize scores to [0, 1] range as required by the submission system
+# Normalize scores to [0, 1]
 all_scores = np.array(all_scores)
 min_s, max_s = np.min(all_scores), np.max(all_scores)
 normalized_scores = (all_scores - min_s) / (max_s - min_s + 1e-8)
