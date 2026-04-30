@@ -133,7 +133,7 @@ all_scores = []
 # We iterate directly through the dataset to handle TTA per image
 for i in range(len(priv_ds)):
     # TaskDataset returns: id, img, label
-    curr_id, img_tensor, label = priv_ds[i]
+    curr_id, img_tensor, label, _ = priv_ds[i]
 
     # Target Model Confidence (16 augmentations for stability)
     target_logits = get_tta_logits(model, img_tensor, n_aug=16)
