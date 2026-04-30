@@ -114,30 +114,27 @@ with torch.no_grad():
     for ids, imgs, labels, _ in loader:
         imgs, labels = imgs.to(device), labels.to(device)
 
-        # Horizontal flipped image for Test time augmentation
+        # Horizontal flipped image for Test Time Augmentation
         imgs_flipped = torch.flip(imgs, dims=[3])
 
-        # Target Model Probabilities (Average of original and flipped)
-        p_t_orig = F.softmax(model(imgs), dim=1)[torch.arange(len(labels)), labels]
-        p_t_flip = F.softmax(model(imgs_flipped), dim=1)[
-            torch.arange(len(labels)), labels
-        ]
-        p_target = (p_t_orig + p_t_flip) / 2.0
+        # Target Model Raw Logits (Average of original and flipped)
+        # We extract the raw logit without passing it through Softmax
+        logit_t_orig = model(imgs)[torch.arange(len(labels)), labels]
+        logit_t_flip = model(imgs_flipped)[torch.arange(len(labels)), labels]
+        logit_target = (logit_t_orig + logit_t_flip) / 2.0
 
-        # Shadow Model Probabilities (Average across all models and flips)
-        p_shadow_sum = 0
+        # Shadow Model Raw Logits
+        logit_shadow_sum = 0
         for s in shadows:
-            p_s_orig = F.softmax(s(imgs), dim=1)[torch.arange(len(labels)), labels]
-            p_s_flip = F.softmax(s(imgs_flipped), dim=1)[
-                torch.arange(len(labels)), labels
-            ]
-            p_shadow_sum += (p_s_orig + p_s_flip) / 2.0
+            l_s_orig = s(imgs)[torch.arange(len(labels)), labels]
+            l_s_flip = s(imgs_flipped)[torch.arange(len(labels)), labels]
+            logit_shadow_sum += (l_s_orig + l_s_flip) / 2.0
 
-        p_shadow_avg = p_shadow_sum / len(shadows)
+        logit_shadow_avg = logit_shadow_sum / len(shadows)
 
-        # Compute Log Ratio (RMIA Score) with larger epsilon to handle zeros
-        eps = 1e-7
-        score = torch.log(p_target + eps) - torch.log(p_shadow_avg + eps)
+        # Compute Logit Difference
+        # By avoiding Softmax, we maintain the extreme resolution needed for TPR @ 5% FPR
+        score = logit_target - logit_shadow_avg
 
         all_ids.extend(ids.tolist())
         all_scores.extend(score.cpu().numpy().tolist())
