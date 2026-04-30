@@ -5,7 +5,7 @@ import requests
 import csv
 import random
 import argparse
-
+from scipy.stats import norm
 from pathlib import Path
 from torch.utils.data import Dataset
 from torchvision.models import resnet18
@@ -103,41 +103,63 @@ for i in range(1, 6):
     s.eval()
     shadows.append(s)
 
-print("Calculating RMIA scores...")
-priv_ds.membership = [-1] * len(priv_ds)  # Replace None with -1
-loader = torch.utils.data.DataLoader(priv_ds, batch_size=256, shuffle=False)
+# Define High-Power Augmentations (TTA)
+# This creates variations of the image to see how "stable" the model's confidence is
+tta_transforms = transforms.Compose(
+    [
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomCrop(32, padding=4),
+        transforms.Normalize(mean=MEAN, std=STD),
+    ]
+)
 
+
+def get_tta_logits(model, img_tensor, n_aug=8):
+    """Average logit for a single image across multiple random augmentations."""
+    logits_list = []
+    # img_tensor is C, H, W. We need to batch it for the model.
+    for _ in range(n_aug):
+        aug_img = tta_transforms(img_tensor).unsqueeze(0).to(device)
+        with torch.no_grad():
+            logits_list.append(model(aug_img))
+    return torch.mean(torch.cat(logits_list), dim=0)
+
+
+print("Calculating LiRA Z-Scores with TTA...")
 all_ids = []
 all_scores = []
 
-with torch.no_grad():
-    for ids, imgs, labels, _ in loader:
-        imgs, labels = imgs.to(device), labels.to(device)
+# Process samples individually for precision
+# We iterate directly through the dataset to handle TTA per image
+for i in range(len(priv_ds)):
+    # TaskDataset returns: id, img, label
+    curr_id, img_tensor, label = priv_ds[i]
 
-        # Horizontal flipped image for Test Time Augmentation
-        imgs_flipped = torch.flip(imgs, dims=[3])
+    # Target Model Confidence (16 augmentations for stability)
+    target_logits = get_tta_logits(model, img_tensor, n_aug=16)
+    target_conf = target_logits[label].item()
 
-        # Target Model Raw Logits (Average of original and flipped)
-        # We extract the raw logit without passing it through Softmax
-        logit_t_orig = model(imgs)[torch.arange(len(labels)), labels]
-        logit_t_flip = model(imgs_flipped)[torch.arange(len(labels)), labels]
-        logit_target = (logit_t_orig + logit_t_flip) / 2.0
+    # Shadow Model Distribution (8 augmentations each across all K models)
+    shadow_confs = []
+    for s in shadows:
+        s_logits = get_tta_logits(s, img_tensor, n_aug=8)
+        shadow_confs.append(s_logits[label].item())
 
-        # Shadow Model Raw Logits
-        logit_shadow_sum = 0
-        for s in shadows:
-            l_s_orig = s(imgs)[torch.arange(len(labels)), labels]
-            l_s_flip = s(imgs_flipped)[torch.arange(len(labels)), labels]
-            logit_shadow_sum += (l_s_orig + l_s_flip) / 2.0
+    # Calculate Gaussian Statistics
+    # How much of an outlier is the target model compared to shadow models?
+    mu = np.mean(shadow_confs)
+    sigma = np.std(shadow_confs) + 1e-8
 
-        logit_shadow_avg = logit_shadow_sum / len(shadows)
+    # Final Score via CDF
+    # This maps the Z-score to a [0, 1] range as required
+    z_score = (target_conf - mu) / sigma
+    final_score = norm.cdf(z_score)
 
-        # Compute Logit Difference
-        # By avoiding Softmax, we maintain the extreme resolution needed for TPR @ 5% FPR
-        score = logit_target - logit_shadow_avg
+    all_ids.append(curr_id)
+    all_scores.append(final_score)
 
-        all_ids.extend(ids.tolist())
-        all_scores.extend(score.cpu().numpy().tolist())
+    if i % 100 == 0:
+        print(f"Processed {i}/{len(priv_ds)} samples...")
 
 # Normalize scores to [0, 1]
 all_scores = np.array(all_scores)
