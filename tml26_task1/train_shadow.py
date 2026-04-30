@@ -64,7 +64,7 @@ pub_ds.transform = transform
 
 
 # Training Loop Function
-def train_shadow(model_name, dataset, epochs=40):  # Increased to 40 epochs
+def train_shadow(model_name, dataset, epochs):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = get_model().to(device)
     loader = DataLoader(dataset, batch_size=128, shuffle=True)
@@ -100,4 +100,4 @@ if __name__ == "__main__":
     for i in range(1, num_shadows + 1):
         # Independent 50% split for every model
         subset, _ = random_split(pub_ds, [0.5, 0.5])
-        train_shadow(f"shadow_{i}", subset, epochs=25)
+        train_shadow(f"shadow_{i}", subset, epochs=40)
