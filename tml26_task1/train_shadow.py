@@ -53,7 +53,8 @@ MEAN = [0.7406, 0.5331, 0.7059]
 STD = [0.1491, 0.1864, 0.1301]
 transform = transforms.Compose(
     [
-        transforms.Resize(32),
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
         transforms.Normalize(mean=MEAN, std=STD),
     ]
 )
@@ -63,14 +64,15 @@ pub_ds.transform = transform
 
 
 # Training Loop Function
-def train_shadow(model_name, dataset, epochs=25):
+def train_shadow(model_name, dataset, epochs=40):  # Increased to 40 epochs
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = get_model().to(device)
     loader = DataLoader(dataset, batch_size=128, shuffle=True)
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    # Add a scheduler that reduces the LR to 0 by the end of training
+
+    # Added weight_decay
+    optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
     print(f"Training {model_name}")
@@ -86,7 +88,7 @@ def train_shadow(model_name, dataset, epochs=25):
             optimizer.step()
             total_loss += loss.item()
 
-        scheduler.step()  # Step the scheduler every epoch
+        scheduler.step()
         print(f"Epoch {epoch + 1}/{epochs} | Loss: {total_loss / len(loader):.4f}")
 
     torch.save(model.state_dict(), BASE / f"{model_name}.pt")
