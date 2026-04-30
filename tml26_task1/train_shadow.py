@@ -96,8 +96,8 @@ def train_shadow(model_name, dataset, epochs):
 
 
 if __name__ == "__main__":
-    num_shadows = 5
+    num_shadows = 16  # Increased for better mean/std estimation
     for i in range(1, num_shadows + 1):
-        # Independent 50% split for every model
+        # Ensure different splits for each model
         subset, _ = random_split(pub_ds, [0.5, 0.5])
         train_shadow(f"shadow_{i}", subset, epochs=40)
