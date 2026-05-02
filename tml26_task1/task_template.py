@@ -19,6 +19,7 @@ BASE = Path(__file__).parent
 PUB_PATH = BASE / "pub.pt"
 PRIV_PATH = BASE / "priv.pt"
 MODEL_PATH = BASE / "model.pt"
+REF_PATH = BASE / "reference.pt"
 OUTPUT_CSV = BASE / "submission.csv"
 
 BASE_URL = "http://34.63.153.158"  # DONOT CHANGE
@@ -26,154 +27,130 @@ API_KEY = "14cdd947fec2bbe735ed8001c9154ce6"
 TASK_ID = "01-mia"  # DONOT CHANGE
 
 
-# dataset classes
-class TaskDataset(Dataset):
-    def __init__(self, transform=None):
-        self.ids = []
-        self.imgs = []
-        self.labels = []
-        self.transform = transform
+# # dataset classes
+# class TaskDataset(Dataset):
+#     def __init__(self, transform=None):
+#         self.ids = []
+#         self.imgs = []
+#         self.labels = []
+#         self.transform = transform
 
-    def __getitem__(self, index):
-        id_ = self.ids[index]
-        img = self.imgs[index]
-        if self.transform is not None:
-            img = self.transform(img)
-        label = self.labels[index]
-        return id_, img, label
+#     def __getitem__(self, index):
+#         id_ = self.ids[index]
+#         img = self.imgs[index]
+#         if self.transform is not None:
+#             img = self.transform(img)
+#         label = self.labels[index]
+#         return id_, img, label
 
-    def __len__(self):
-        return len(self.ids)
-
-
-class MembershipDataset(TaskDataset):
-    def __init__(self, transform=None):
-        super().__init__(transform)
-        self.membership = []
-
-    def __getitem__(self, index):
-        id_, img, label = super().__getitem__(index)
-        return id_, img, label, self.membership[index]
+#     def __len__(self):
+#         return len(self.ids)
 
 
-# load datasets
-print("Loading datasets...")
-pub_ds = torch.load(PUB_PATH, weights_only=False)
-priv_ds = torch.load(PRIV_PATH, weights_only=False)
+# class MembershipDataset(TaskDataset):
+#     def __init__(self, transform=None):
+#         super().__init__(transform)
+#         self.membership = []
+
+#     def __getitem__(self, index):
+#         id_, img, label = super().__getitem__(index)
+#         return id_, img, label, self.membership[index]
 
 
-# normalization (same as training)
-MEAN = [0.7406, 0.5331, 0.7059]
-STD = [0.1491, 0.1864, 0.1301]
-
-transform = transforms.Compose(
-    [
-        transforms.Resize(32),
-        transforms.Normalize(mean=MEAN, std=STD),
-    ]
-)
-
-pub_ds.transform = transform
-priv_ds.transform = transform
+# # load datasets
+# print("Loading datasets...")
+# pub_ds = torch.load(PUB_PATH, weights_only=False)
+# priv_ds = torch.load(PRIV_PATH, weights_only=False)
 
 
-# load model
-print("Loading model.")
-model = resnet18(weights=None)
-model.conv1 = torch.nn.Conv2d(3, 64, 3, 1, 1, bias=False)
-model.maxpool = torch.nn.Identity()
-model.fc = torch.nn.Linear(512, 9)
+# # normalization (same as training)
+# MEAN = [0.7406, 0.5331, 0.7059]
+# STD = [0.1491, 0.1864, 0.1301]
 
-model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
-model.eval()
+# transform = transforms.Compose(
+#     [
+#         transforms.Resize(32),
+#         transforms.Normalize(mean=MEAN, std=STD),
+#     ]
+# )
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.to(device)
-model.eval()
-
-print("Loading all shadow models.")
-shadows = []
-for i in range(1, 6):
-    s = resnet18(weights=None)
-    s.conv1 = torch.nn.Conv2d(3, 64, 3, 1, 1, bias=False)
-    s.maxpool = torch.nn.Identity()
-    s.fc = torch.nn.Linear(512, 9)
-    s.load_state_dict(torch.load(BASE / f"shadow_{i}.pt", map_location=device))
-    s.to(device)
-    s.eval()
-    shadows.append(s)
-
-# Define High-Power Augmentations (TTA)
-# This creates variations of the image to see how "stable" the model's confidence is
-tta_transforms = transforms.Compose(
-    [
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomCrop(32, padding=4),
-        transforms.Normalize(mean=MEAN, std=STD),
-    ]
-)
+# pub_ds.transform = transform
+# priv_ds.transform = transform
 
 
-def get_tta_logits(model, img_tensor, n_aug=8):
-    """Average logit for a single image across multiple random augmentations."""
-    logits_list = []
-    # img_tensor is C, H, W. We need to batch it for the model.
-    for _ in range(n_aug):
-        aug_img = tta_transforms(img_tensor).unsqueeze(0).to(device)
-        with torch.no_grad():
-            logits_list.append(model(aug_img))
-    return torch.mean(torch.cat(logits_list), dim=0)
+# # load model
+# print("Loading model.")
+# model = resnet18(weights=None)
+# model.conv1 = torch.nn.Conv2d(3, 64, 3, 1, 1, bias=False)
+# model.maxpool = torch.nn.Identity()
+# model.fc = torch.nn.Linear(512, 9)
+
+# model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# model.to(device)
+# model.eval()
+
+# print("Loading reference model...")
+# ref_model = resnet18(weights=None)
+# ref_model.conv1 = torch.nn.Conv2d(3, 64, 3, 1, 1, bias=False)
+# ref_model.maxpool = torch.nn.Identity()
+# ref_model.fc = torch.nn.Linear(512, 9)
+# ref_model.load_state_dict(torch.load(BASE / "reference.pt", map_location="cpu"))
+# ref_model.to(device)
+# ref_model.eval()
 
 
-print("Calculating LiRA Z-Scores with TTA...")
-all_ids = []
-all_scores = []
+# def log_odds(logits, label):
+#     """phi(x) = log(p_y / (1 - p_y)) — correct statistic for reference attack."""
+#     p = F.softmax(logits, dim=-1)[label].clamp(1e-7, 1 - 1e-7)
+#     return (p / (1 - p)).log().item()
 
-# Process samples individually for precision
-# We iterate directly through the dataset to handle TTA per image
-for i in range(len(priv_ds)):
-    # TaskDataset returns: id, img, label
-    curr_id, img_tensor, label, _ = priv_ds[i]
 
-    # Target Model Confidence (16 augmentations for stability)
-    target_logits = get_tta_logits(model, img_tensor, n_aug=16)
-    target_conf = target_logits[label].item()
+# tta_tf = transforms.Compose(
+#     [
+#         transforms.RandomHorizontalFlip(),
+#         transforms.RandomCrop(32, padding=4),
+#     ]
+# )
 
-    # Shadow Model Distribution (8 augmentations each across all K models)
-    shadow_confs = []
-    for s in shadows:
-        s_logits = get_tta_logits(s, img_tensor, n_aug=8)
-        shadow_confs.append(s_logits[label].item())
 
-    # Calculate Gaussian Statistics
-    # How much of an outlier is the target model compared to shadow models?
-    mu = np.mean(shadow_confs)
-    sigma = np.std(shadow_confs) + 1e-8
+# def score_sample(img_tensor, label, n_tta=8):
+#     """Returns reference-model attack score for one sample."""
+#     imgs = torch.stack([tta_tf(img_tensor) for _ in range(n_tta)]).to(device)
+#     with torch.no_grad():
+#         phi_t = log_odds(model(imgs).mean(0), label)
+#         phi_r = log_odds(ref_model(imgs).mean(0), label)
+#     return phi_t - phi_r
 
-    # Final Score via CDF
-    # This maps the Z-score to a [0, 1] range as required
-    z_score = (target_conf - mu) / sigma
-    final_score = norm.cdf(z_score)
 
-    all_ids.append(curr_id)
-    all_scores.append(final_score)
+# print("Scoring priv.pt with reference model attack...")
+# all_ids, all_scores = [], []
 
-    if i % 100 == 0:
-        print(f"Processed {i}/{len(priv_ds)} samples...")
+# for i in range(len(priv_ds)):
+#     curr_id, img_tensor, label, _ = priv_ds[i]
+#     s = score_sample(img_tensor, label, n_tta=8)
+#     all_ids.append(curr_id)
+#     all_scores.append(s)
+#     if i % 200 == 0:
+#         print(f"  {i}/{len(priv_ds)}")
 
-# Normalize scores to [0, 1]
-all_scores = np.array(all_scores)
-min_s, max_s = np.min(all_scores), np.max(all_scores)
-normalized_scores = (all_scores - min_s) / (max_s - min_s + 1e-8)
+# all_scores = np.array(all_scores)
+# lo, hi = all_scores.min(), all_scores.max()
+# normalized = (all_scores - lo) / (hi - lo + 1e-8)
 
-print("Creating submission...")
-with open(OUTPUT_CSV, "w", newline="") as f:
-    writer = csv.writer(f)
-    writer.writerow(["id", "score"])
-    for curr_id, curr_score in zip(all_ids, normalized_scores):
-        writer.writerow([curr_id, curr_score])
 
-print("Saved:", OUTPUT_CSV)
+# with open(OUTPUT_CSV, "w", newline="") as f:
+#     w = csv.writer(f)
+#     w.writerow(["id", "score"])
+#     for cid, cs in zip(all_ids, normalized):
+#         w.writerow([cid, float(cs)])
+
+# print("Saved:", OUTPUT_CSV)
+
+if not OUTPUT_CSV.exists():
+    raise FileNotFoundError("Run train_meta.py first to generate submission.csv")
+
+print("Loaded pre-computed scores from train_meta.py")
 
 
 # submit
