@@ -122,6 +122,7 @@ def extract_features(img_tensor, label, target, ref, shadows, device, n_tta=32):
         phi_t - phi_r,  # Reference signal
         lira_z,  # LiRA signal
         get_entropy(t_logits),
+        label,  # Add the class ID as a feature
     ]
 
 
