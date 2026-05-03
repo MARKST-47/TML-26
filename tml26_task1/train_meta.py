@@ -87,7 +87,7 @@ def extract_features(img_tensor, label, target, ref, shadows, device, n_tta=32):
     t_logits_mean = t_logits_batch.mean(0)
     phi_t = log_odds(t_logits_mean, label)
     phi_t_per_aug = [log_odds(t_logits_batch[k], label) for k in range(n_tta)]
-    phi_t_std = np.std(phi_t_per_aug)  # Lower = more stable = member signal
+    phi_t_std = np.std(phi_t_per_aug)
 
     # Reference — Per-augmentation stability
     r_logits_batch = ref(imgs)
@@ -96,15 +96,19 @@ def extract_features(img_tensor, label, target, ref, shadows, device, n_tta=32):
     phi_r_per_aug = [log_odds(r_logits_batch[k], label) for k in range(n_tta)]
     phi_r_std = np.std(phi_r_per_aug)
 
-    # Shadows for LiRA
+    # Shadows for LiRA — now with per-shadow TTA variance
     shadow_phis = []
+    shadow_stds = []
     for s in shadows:
-        s_logits = s(imgs).mean(0)
-        shadow_phis.append(log_odds(s_logits, label))
+        s_logits_batch = s(imgs)  # [n_tta, 9] — reuse full batch
+        s_phis = [log_odds(s_logits_batch[k], label) for k in range(n_tta)]
+        shadow_phis.append(np.mean(s_phis))
+        shadow_stds.append(np.std(s_phis))
 
     shadow_mean = np.mean(shadow_phis)
     shadow_std = np.std(shadow_phis) + 1e-8
     lira_z = (phi_t - shadow_mean) / shadow_std
+    shadow_std_mean = np.mean(shadow_stds)  # avg shadow instability
 
     return [
         phi_t,
@@ -114,7 +118,9 @@ def extract_features(img_tensor, label, target, ref, shadows, device, n_tta=32):
         phi_t_std,
         phi_r_std,
         phi_t_std - phi_r_std,
-        label,  # Keep label for per-class normalization
+        shadow_std_mean,
+        phi_t_std - shadow_std_mean,
+        label,
     ]
 
 
@@ -198,13 +204,15 @@ X_train, X_val, y_train, y_val = train_test_split(
 def objective(trial):
     params = {
         "n_estimators": 100,
-        "max_depth": trial.suggest_int("max_depth", 2, 5),
-        "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.15, log=True),
-        "subsample": trial.suggest_float("subsample", 0.5, 0.9),
+        "max_depth": trial.suggest_int("max_depth", 2, 3),  # was 2-5
+        "learning_rate": trial.suggest_float(
+            "learning_rate", 0.008, 0.03, log=True
+        ),  # was 0.01-0.15
+        "subsample": trial.suggest_float("subsample", 0.55, 0.70),  # was 0.5-0.9
         "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
-        "reg_lambda": trial.suggest_float("reg_lambda", 1.0, 30.0),
-        "reg_alpha": trial.suggest_float("reg_alpha", 0.0, 5.0),
-        "min_child_weight": trial.suggest_int("min_child_weight", 1, 10),
+        "reg_lambda": trial.suggest_float("reg_lambda", 15.0, 30.0),  # was 1-30
+        "reg_alpha": trial.suggest_float("reg_alpha", 0.0, 2.0),  # was 0-5
+        "min_child_weight": trial.suggest_int("min_child_weight", 1, 6),  # was 1-10
         "eval_metric": "logloss",
         "random_state": 42,
     }
@@ -216,7 +224,7 @@ def objective(trial):
 
 print("Starting Optuna optimization...")
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=100)
+study.optimize(objective, n_trials=200)  # was 100
 print(f"Best params: {study.best_params}")
 
 # Final Train
