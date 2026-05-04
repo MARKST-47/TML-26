@@ -20,7 +20,7 @@ The objective of this task is to perform a Membership Inference Attack to determ
 *   **Calibration:** Features were normalized on a per-class basis to account for varying model confidence levels across different image categories.
 
 ### 🚀 Reproducibility
-For specific instructions on how to recreate our best leaderboard result, please refer to the detailed [Task 1 README](./task1/README.md).
+For specific instructions on how to recreate our best leaderboard result, please refer to the detailed [Task 1 README](./tml26_task1/README.md).
 
 ## ✍️ Team Information
 *   **Team ID:** team034
