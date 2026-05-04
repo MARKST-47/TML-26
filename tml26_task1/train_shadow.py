@@ -99,5 +99,8 @@ if __name__ == "__main__":
     num_shadows = 16  # Increased for better mean/std estimation
     for i in range(1, num_shadows + 1):
         # Ensure different splits for each model
-        subset, _ = random_split(pub_ds, [0.5, 0.5])
-        train_shadow(f"shadow_{i}", subset, epochs=40)
+        subset, _ = random_split(
+            pub_ds, [0.5, 0.5], generator=torch.Generator().manual_seed(i)
+        )  # different seed per model
+        torch.save(subset.indices, BASE / f"shadow_{i}_indices.pt")
+        train_shadow(f"shadow_{i}", subset, epochs=30)
