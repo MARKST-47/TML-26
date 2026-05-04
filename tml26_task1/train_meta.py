@@ -59,7 +59,7 @@ class MembershipDataset(TaskDataset):
         return id_, img, label, self.membership[index]
 
 
-# FEATURE EXTRACTION WITH TTA VARIANCE
+# FEATURE EXTRACTION
 def log_odds(logits, label):
     p = F.softmax(logits, dim=-1)[label].clamp(1e-7, 1 - 1e-7)
     return (p / (1 - p)).log().item()
@@ -79,52 +79,55 @@ tta_tf = transforms.Compose(
 
 
 @torch.no_grad()
-def extract_features(img_tensor, label, target, ref, shadows, device, n_tta=32):
+def extract_features(
+    img_tensor,
+    label,
+    target,
+    ref,
+    shadows,
+    shadow_indices,
+    device,
+    sample_idx=None,
+    n_tta=32,
+):
     imgs = torch.stack([tta_tf(img_tensor) for _ in range(n_tta)]).to(device)
 
-    # Target — Per-augmentation stability
-    t_logits_batch = target(imgs)
-    t_logits_mean = t_logits_batch.mean(0)
-    phi_t = log_odds(t_logits_mean, label)
-    phi_t_per_aug = [log_odds(t_logits_batch[k], label) for k in range(n_tta)]
-    phi_t_std = np.std(phi_t_per_aug)
+    # Target & Reference log-odds
+    t_logits = target(imgs).mean(0)
+    phi_t = log_odds(t_logits, label)
+    r_logits = ref(imgs).mean(0)
+    phi_r = log_odds(r_logits, label)
 
-    # Reference — Per-augmentation stability
-    r_logits_batch = ref(imgs)
-    r_logits_mean = r_logits_batch.mean(0)
-    phi_r = log_odds(r_logits_mean, label)
-    phi_r_per_aug = [log_odds(r_logits_batch[k], label) for k in range(n_tta)]
-    phi_r_std = np.std(phi_r_per_aug)
+    # Collect shadow phis
+    all_shadow_phis = []
+    out_phis = []
+    for s, s_idx in zip(shadows, shadow_indices):
+        phi_s = log_odds(s(imgs).mean(0), label)
+        all_shadow_phis.append(phi_s)
+        if sample_idx is not None and s_idx is not None:
+            if sample_idx not in s_idx:
+                out_phis.append(phi_s)
+        else:
+            out_phis.append(phi_s)
 
-    # Shadows for LiRA — now with per-shadow TTA variance
-    shadow_phis = []
-    shadow_stds = []
-    for s in shadows:
-        s_logits_batch = s(imgs)  # [n_tta, 9] — reuse full batch
-        s_phis = [log_odds(s_logits_batch[k], label) for k in range(n_tta)]
-        shadow_phis.append(np.mean(s_phis))
-        shadow_stds.append(np.std(s_phis))
+    # Use "OUT" models to calculate the null distribution (consistent for pub and priv)
+    mu_out = np.mean(out_phis)
+    sigma_out = np.std(out_phis) + 1e-8
 
-    shadow_mean = np.mean(shadow_phis)
-    shadow_std = np.std(shadow_phis) + 1e-8
-    lira_z = (phi_t - shadow_mean) / shadow_std
-    shadow_std_mean = np.mean(shadow_stds)  # avg shadow instability
+    # This is the "honest" LiRA Z-score
+    lira_z = (phi_t - mu_out) / sigma_out
 
     return [
         phi_t,
         phi_t - phi_r,
-        lira_z,
-        get_entropy(t_logits_mean),
-        phi_t_std,
-        phi_r_std,
-        phi_t_std - phi_r_std,
-        shadow_std_mean,
-        phi_t_std - shadow_std_mean,
+        lira_z,  # Core LiRA signal
+        get_entropy(t_logits),
+        phi_t - mu_out,  # Raw difference
         label,
     ]
 
 
-# PER-CLASS NORMALIZATION LOGIC
+# PER-CLASS NORMALIZATION
 def normalize_per_class(X, labels_col, class_stats):
     X_norm = X.copy()
     for c, (mu, sigma) in class_stats.items():
@@ -139,12 +142,18 @@ def tpr_at_fpr(scores, labels, target_fpr=0.05):
     return float(tpr[max(idx, 0)])
 
 
-# MAIN EXECUTION
+# SETUP
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Device: {device}")
+
 transform = transforms.Compose(
-    [transforms.Resize(32), transforms.Normalize(mean=MEAN, std=STD)]
+    [
+        transforms.Resize(32),
+        transforms.Normalize(mean=MEAN, std=STD),
+    ]
 )
 
+print("Loading datasets...")
 pub_ds = torch.load(BASE / "pub.pt", weights_only=False)
 priv_ds = torch.load(BASE / "priv.pt", weights_only=False)
 pub_ds.transform = transform
@@ -160,27 +169,55 @@ def load_resnet(path, device):
     return m.to(device).eval()
 
 
+print("Loading target model...")
 target = load_resnet(BASE / "model.pt", device)
-ref = load_resnet(BASE / "reference.pt", device)
-shadows = [
-    load_resnet(BASE / f"shadow_{i}.pt", device)
-    for i in range(1, 17)
-    if (BASE / f"shadow_{i}.pt").exists()
-]
 
-# Feature Extraction
-print("Extracting features (this will take time with N_TTA=32)...")
+print("Loading reference model...")
+ref = load_resnet(BASE / "reference.pt", device)
+
+print("Loading shadow models and indices...")
+shadows = []
+shadow_indices = []
+for i in range(1, 17):
+    p = BASE / f"shadow_{i}.pt"
+    if p.exists():
+        shadows.append(load_resnet(p, device))
+        idx_path = BASE / f"shadow_{i}_indices.pt"
+        if idx_path.exists():
+            shadow_indices.append(set(torch.load(idx_path)))
+        else:
+            shadow_indices.append(None)
+print(f"  Loaded {len(shadows)} shadow models")
+print(
+    f"  Indices available for {sum(x is not None for x in shadow_indices)}/{len(shadows)} shadows"
+)
+
+
+# EXTRACT FEATURES FOR PUB.PT
+print("\nExtracting features for pub.pt...")
 pub_features = []
 for i in range(len(pub_ds)):
     pub_features.append(
-        extract_features(pub_ds[i][1], pub_ds[i][2], target, ref, shadows, device)
+        extract_features(
+            pub_ds[i][1],
+            pub_ds[i][2],
+            target,
+            ref,
+            shadows,
+            shadow_indices,
+            device,
+            sample_idx=i,
+        )
     )
     if i % 200 == 0:
         print(f"  pub.pt {i}/{len(pub_ds)}")
+
 X_pub = np.array(pub_features)
 y_pub = np.array([int(pub_ds[i][3]) for i in range(len(pub_ds))])
+print(f"pub.pt: {X_pub.shape}, members={y_pub.sum()}, non-members={(1 - y_pub).sum()}")
 
-# Compute Class Stats using Pub Non-Members
+
+# PER-CLASS NORMALIZATION USING PUB NON-MEMBERS
 labels_pub = X_pub[:, -1].astype(int)
 class_stats = {}
 for c in np.unique(labels_pub):
@@ -195,24 +232,25 @@ X_pub_cn = normalize_per_class(X_pub, labels_pub, class_stats)
 scaler = StandardScaler()
 X_pub_scaled = scaler.fit_transform(X_pub_cn)
 
+
 # OPTUNA HYPERPARAMETER SEARCH
 X_train, X_val, y_train, y_val = train_test_split(
     X_pub_scaled, y_pub, test_size=0.2, random_state=42, stratify=y_pub
 )
 
+optuna.logging.set_verbosity(optuna.logging.WARNING)
+
 
 def objective(trial):
     params = {
         "n_estimators": 100,
-        "max_depth": trial.suggest_int("max_depth", 2, 3),  # was 2-5
-        "learning_rate": trial.suggest_float(
-            "learning_rate", 0.008, 0.03, log=True
-        ),  # was 0.01-0.15
-        "subsample": trial.suggest_float("subsample", 0.55, 0.70),  # was 0.5-0.9
+        "max_depth": trial.suggest_int("max_depth", 2, 3),
+        "learning_rate": trial.suggest_float("learning_rate", 0.008, 0.03, log=True),
+        "subsample": trial.suggest_float("subsample", 0.55, 0.70),
         "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
-        "reg_lambda": trial.suggest_float("reg_lambda", 15.0, 30.0),  # was 1-30
-        "reg_alpha": trial.suggest_float("reg_alpha", 0.0, 2.0),  # was 0-5
-        "min_child_weight": trial.suggest_int("min_child_weight", 1, 6),  # was 1-10
+        "reg_lambda": trial.suggest_float("reg_lambda", 15.0, 30.0),
+        "reg_alpha": trial.suggest_float("reg_alpha", 0.0, 2.0),
+        "min_child_weight": trial.suggest_int("min_child_weight", 1, 6),
         "eval_metric": "logloss",
         "random_state": 42,
     }
@@ -224,23 +262,37 @@ def objective(trial):
 
 print("Starting Optuna optimization...")
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=200)  # was 100
+study.optimize(objective, n_trials=200, show_progress_bar=True)
+print(f"Best val TPR@5%FPR: {study.best_value:.4f}")
 print(f"Best params: {study.best_params}")
 
-# Final Train
+
+# FINAL TRAIN ON ALL PUB DATA
 clf = XGBClassifier(
     **study.best_params, n_estimators=100, eval_metric="logloss", random_state=42
 )
 clf.fit(X_pub_scaled, y_pub)
 
-# PRIVATE PREDICTION
-print("Predicting for priv.pt...")
+pub_pred_scores = clf.predict_proba(X_pub_scaled)[:, 1]
+print(
+    f"In-sample TPR@5%FPR on pub.pt: {tpr_at_fpr(pub_pred_scores, y_pub):.4f} (optimistic)"
+)
+
+
+# EXTRACT FEATURES FOR PRIV.PT
+print("\nExtracting features for priv.pt...")
 priv_features = []
 priv_ids = []
 for i in range(len(priv_ds)):
     curr_id, img, label, _ = priv_ds[i]
-    priv_features.append(extract_features(img, label, target, ref, shadows, device))
+    priv_features.append(
+        extract_features(
+            img, label, target, ref, shadows, shadow_indices, device, sample_idx=None
+        )
+    )
     priv_ids.append(curr_id)
+    if i % 200 == 0:
+        print(f"  priv.pt {i}/{len(priv_ds)}")
 
 X_priv = np.array(priv_features)
 labels_priv = X_priv[:, -1].astype(int)
@@ -249,10 +301,11 @@ X_priv_scaled = scaler.transform(X_priv_cn)
 
 priv_scores = clf.predict_proba(X_priv_scaled)[:, 1]
 
+
 # SUBMISSION
 with open(BASE / "submission.csv", "w", newline="") as f:
     w = csv.writer(f)
     w.writerow(["id", "score"])
     for cid, cs in zip(priv_ids, priv_scores):
         w.writerow([cid, float(cs)])
-print("Done. submission.csv is ready.")
+print(f"Done. {len(priv_ids)} rows written to submission.csv")
