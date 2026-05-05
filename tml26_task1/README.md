@@ -2,7 +2,7 @@
 
 ## How to Reproduce Our Best Result
 
-Our best leaderboard score (0.0576 TPR@5%FPR) uses an XGBoost meta-classifier trained on features extracted from a target model, a reference model, and 16 shadow models.
+Our best leaderboard score (0.0580 TPR@5%FPR) uses an XGBoost meta-classifier trained on features extracted from a target model, a reference model, and 16 shadow models.
 
 ### Prerequisites
 
