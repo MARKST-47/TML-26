@@ -2,7 +2,7 @@
 
 ## How to Reproduce Our Best Result
 
-Our best leaderboard score (0.0576 TPR@5%FPR) uses an XGBoost meta-classifier trained on features extracted from a target model, a reference model, and 16 shadow models.
+Our best leaderboard score (0.0580 TPR@5%FPR) uses an XGBoost meta-classifier trained on features extracted from a target model, a reference model, and 16 shadow models.
 
 ### Prerequisites
 
@@ -34,7 +34,8 @@ pip install scikit-learn
 python train_shadow.py
 ```
 
-This trains 16 shadow models on random 50% splits of pub.pt (40 epochs each). Output: `shadow_1.pt` through `shadow_16.pt`.
+This trains 16 shadow models on random 50% splits of pub.pt (30 epochs each). Output: `shadow_1.pt` through `shadow_16.pt`.
+This trains 16 shadow models on random 50% splits of pub.pt (30 epochs each) and saves their training indices. Output: `shadow_1.pt` through `shadow_16.pt` and `shadow_1_indices.pt` through `shadow_16_indices.pt`
 
 ### Step 4: Train the reference model
 
