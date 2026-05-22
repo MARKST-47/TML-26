@@ -1,0 +1,22 @@
+# pipeline.sub
+universe                = docker
+docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+executable              = /opt/conda/bin/python
+
+# Absolute home path
+arguments               = /home/atml_team034/tml26_task2/run_pipeline.py
+
+output                  = runlogs/pipeline.$(ClusterId).$(ProcId).out
+error                   = runlogs/pipeline.$(ClusterId).$(ProcId).err
+log                     = runlogs/pipeline.$(ClusterId).log
+
+should_transfer_files   = YES
+request_gpus            = 1
+request_cpus            = 2
+request_memory          = 16G
+request_disk            = 30G
+
+requirements            = UidDomain == "cs.uni-saarland.de"
++WantGPUHomeMounted     = true
+
+queue 1
