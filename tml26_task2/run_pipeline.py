@@ -28,7 +28,7 @@ except Exception as e:
 sys.path.insert(0, local_lib_dir)
 
 # 5. Hand execution over to your pipeline entrypoint
-import task_template
+import detect_stolen_v2
 
 if __name__ == "__main__":
-    task_template.main()
+    detect_stolen_v2.main()
