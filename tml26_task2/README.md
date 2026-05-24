@@ -49,7 +49,6 @@ Best verified submission: `results/submission_5926.csv`
 tml26_task2/
 ├── detect_stolen_v2.py       # Active production pipeline (best score: 0.5926)
 ├── detect_stolen.py          # Baseline v1 pipeline (score: 0.5741)
-├── task_template.py          # Original course skeleton
 ├── run_pipeline.py           # Cluster bootstrap and execution wrapper
 ├── pipeline.sub              # HTCondor job configuration
 ├── submission.py             # Leaderboard submission script
