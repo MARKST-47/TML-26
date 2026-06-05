@@ -51,6 +51,14 @@ Our production framework (`v2`) operates a calibrated ensemble across 9 distinct
 
 To replicate our top-performing pipeline, please refer to the detailed [Task 2 README](./tml26_task2/README.md).
 
+## 🛡️ Task 3: Adversarial ML & Robustness
+
+### Overview
+
+### Key Methodology
+
+### 🚀 Reproducibility
+
 ## ✍️ Team Information
 
 - **Team ID:** team034
