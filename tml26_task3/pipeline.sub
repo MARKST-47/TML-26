@@ -2,7 +2,6 @@ universe                = docker
 docker_image            = pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 executable              = /opt/conda/bin/python
 
-# Absolute path updated for Task 3
 arguments               = /home/atml_team034/tml26_task3/run_pipeline.py
 
 output                  = runlogs/pipeline.$(ClusterId).$(ProcId).out
