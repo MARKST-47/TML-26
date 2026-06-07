@@ -2,14 +2,19 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import os
 from torch.utils.data import DataLoader, TensorDataset
 from torchvision.models import resnet50
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# The dataset is provided as a .npz file (compressed numpy archive)
-data = np.load("train.npz")
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Construct absolute path to the dataset
+dataset_path = os.path.join(SCRIPT_DIR, "train.npz")
+print(f"Loading dataset from: {dataset_path}")
+data = np.load(dataset_path)
 images = torch.from_numpy(data["images"]).float() / 255.0
 labels = torch.from_numpy(data["labels"]).long()
 
