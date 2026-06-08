@@ -55,9 +55,13 @@ To replicate our top-performing pipeline, please refer to the detailed [Task 2 R
 
 ### Overview
 
+The objective is to train an adversarially robust model capable of defending against unknown server-side adversarial attacks while preserving high generalization performance on clean data. We are provided with a compressed dataset (train.npz) containing $32 \times 32$ images spanning 9 distinct classes, to be trained using a customized ResNet-50 architecture. The challenge is in navigating the fundamental trade-off between standard accuracy and adversarial robustness to maximize a balanced scoring metric ($0.5 \times \text{clean} + 0.5 \times \text{robust}$) without prior knowledge of the evaluation attack vector.
+
 ### Key Methodology
 
 ### 🚀 Reproducibility
+
+To replicate our top-performing pipeline, please refer to the detailed [Task 3 README](./tml26_task3/README.md).
 
 ## ✍️ Team Information
 
