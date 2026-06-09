@@ -176,6 +176,6 @@ for epoch in range(1, EPOCHS + 1):
         lr_n = scheduler.get_last_lr()[0]
         print(f"Epoch [{epoch:>3}/{EPOCHS}]  loss={avg:.4f}  lr={lr_n:.5f}")
  
-save_path = os.path.join(SCRIPT_DIR, "model.pt")
+save_path = os.path.join(SCRIPT_DIR, "model_trades.pt")
 torch.save(model.state_dict(), save_path)
 print(f"\n State dict saved → {save_path}")
