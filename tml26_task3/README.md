@@ -10,4 +10,12 @@ Train an adversarially robust ResNet classifier using a 9-class, $32 \times 32$ 
 
 ## Directory Structure
 
+```
+tml26_task3/
+├── run_pipeline.py           # Cluster bootstrap and execution wrapper
+├── pipeline.sub              # HTCondor job configuration
+├── submission.py             # Leaderboard submission script
+├── models/
+```
+
 ## Reproducing the Best Result
