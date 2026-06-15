@@ -8,6 +8,7 @@ This repository contains the projects and assignments for the **Trustworthy Mach
 | :--------- | :----------------------------------------- | :----------- |
 | **Task 1** | Privacy: Membership Inference Attack (MIA) | ✅ Completed |
 | **Task 2** | Model Stealing: Stolen Model Detection     | ✅ Completed |
+| **Task 3** | Adversarial ML & Robustness                | ✅ Completed |
 
 ---
 
