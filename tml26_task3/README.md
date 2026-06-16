@@ -1,7 +1,7 @@
 # TML Task 3: Adversarial Robustness
 
 **Team:** team_LXIV (atml_team034)  
-**Best Leaderboard Score:** 0.6114  
+**Best Leaderboard Score:**  0.6137  
 **Architecture:** ResNet18 (pretrained, ImageNet)  
 **Approach:** TRADES adversarial training
 
@@ -27,7 +27,7 @@
 3. **Submit the best model to the leaderboard:**
    
    Edit `submission.py`:
-   - Set `MODEL_PATH` to the path of `model_best_v6.pt`
+   - Set `MODEL_PATH` to the path of `model_best_v7.pt`
    - Set `MODEL_NAME = "resnet18"`
    - Set your API key
    
@@ -46,7 +46,7 @@
 | Epsilon | 8/255 |
 | Step size | 2/255 |
 | Batch size | 256 |
-| Epochs | 150 |
+| Epochs | 200 |
 | Optimizer | SGD (Nesterov, momentum=0.9) |
 | Weight decay | 5e-4 |
 | LR schedule | Warmup (5ep) + Cosine annealing |
@@ -62,7 +62,7 @@
 - `pipeline_v5.sub` : HTCondor submit file
 - `submission.py` : Leaderboard submission script
 - `train.npz` : Training dataset
-- `model_best_v6.pt` : Best model checkpoint (output)
+- `model_best_v7.pt` : Best model checkpoint (output)
 
 ### Expected Output
 
