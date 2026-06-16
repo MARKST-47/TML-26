@@ -60,6 +60,16 @@ The objective is to train an adversarially robust model capable of defending aga
 
 ### Key Methodology
 
+- **TRADES Optimization:** Utilized the TRADES loss function with a tuned regularization parameter (beta = 4.0) to analytically balance the fundamental trade-off between clean classification performance and robust accuracy.
+
+- **Adversarial Training Inner Loop:** Employed a 7-step Projected Gradient Descent (PGD) attack loop with an operating radius of epsilon = 8/255 and a step size of 2/255, freezing model weights during the perturbation step to eliminate redundant backward passes.
+
+- **Pretrained Initialization & Warmup:** Leveraged ImageNet pretrained weights to provide a strong structural feature foundation, combined with a 5-epoch linear learning rate warmup to protect the pretrained weight basins from early gradient disruption.
+
+- **Regularization & Optimization Stack:** Combined Automatic Mixed Precision (AMP) and Nesterov SGD with label smoothing (0.1) and basic spatial augmentations (Random Crop and Horizontal Flip) to maximize clean generalization metrics.
+
+- **Robust Overfitting Mitigation:** Implemented a high-frequency checkpointing engine evaluated against a local PGD-20 validation benchmark every 5 epochs, isolating the peak-performing model before the onset of robust validation decay.
+
 ### 🚀 Reproducibility
 
 To replicate our top-performing pipeline, please refer to the detailed [Task 3 README](./tml26_task3/README.md).
