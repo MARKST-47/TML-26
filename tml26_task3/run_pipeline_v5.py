@@ -1,23 +1,3 @@
-"""
-TML Task 3 — Adversarial Robustness Training (v6)
-Team: atml_team034
-
-Philosophy: Mark's code scored 0.607. Don't fix what works.
-Only add: checkpointing (to catch the best epoch before robust overfitting)
-         + 150 epochs (Mark used 120, loss was still dropping)
-         + train on ALL 50k samples (no val split — Mark didn't split either)
-         + evaluate on train subset every 10 epochs just for logging
-
-Everything else is identical to Mark's recipe:
-  - Pretrained ResNet18 (ImageNet)
-  - TRADES BETA=4.0
-  - 7 PGD steps, eps=8/255, step_size=2/255
-  - Label smoothing 0.1
-  - Warmup 5 epochs + cosine LR
-  - AMP + Nesterov SGD
-  - Batch size 256
-"""
-
 import math
 import torch
 import torch.nn as nn
@@ -33,15 +13,13 @@ print(f"Device: {device}", flush=True)
 if device.type == "cuda":
     torch.backends.cudnn.benchmark = True
 
-# ──────────────────────────────────────────────
-# Config — IDENTICAL to Mark's proven settings
-# ──────────────────────────────────────────────
+# Config 
 BATCH_SIZE = 256
-EPOCHS = 200           # A bit more room
-BETA = 4.0             # Proven value
+EPOCHS = 200           
+BETA = 4.0             
 EPSILON = 8 / 255
 STEP_SIZE = 2 / 255
-PGD_STEPS = 7          # Proven value
+PGD_STEPS = 7          
 NUM_CLASSES = 9
 WARMUP_EPOCHS = 5
 LABEL_SMOOTHING = 0.1
@@ -51,9 +29,6 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CHECKPOINT_DIR = os.path.join(SCRIPT_DIR, "checkpoints_v6")
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-# ──────────────────────────────────────────────
-# Data — ALL 50k samples, no val split (like Mark)
-# ──────────────────────────────────────────────
 dataset_path = os.path.join(SCRIPT_DIR, "train.npz")
 print(f"Loading: {dataset_path}", flush=True)
 raw = np.load(dataset_path)
@@ -106,9 +81,7 @@ print(f"Train: {len(lbls)} (full dataset, no split)", flush=True)
 print(f"Eval subset: {len(eval_indices)} samples", flush=True)
 print(f"Batches/epoch: {len(train_loader)}", flush=True)
 
-# ──────────────────────────────────────────────
-# Model — Pretrained ResNet18, only fc replaced
-# ──────────────────────────────────────────────
+
 model = resnet18(weights="IMAGENET1K_V1")
 model.fc = nn.Linear(model.fc.in_features, NUM_CLASSES)
 model = model.to(device)
@@ -119,15 +92,10 @@ with torch.no_grad():
     assert _check.shape == (2, NUM_CLASSES), f"Bad output shape: {_check.shape}"
 print(f"Output shape: {list(_check.shape)} ✓", flush=True)
 
-# ──────────────────────────────────────────────
-# AMP
-# ──────────────────────────────────────────────
+
 use_amp = (device.type == "cuda")
 scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
-# ──────────────────────────────────────────────
-# TRADES PGD — identical to Mark's implementation
-# ──────────────────────────────────────────────
 def trades_pgd(model, x_nat):
     model.eval()
     for p in model.parameters():
@@ -161,9 +129,8 @@ def trades_pgd(model, x_nat):
     return x_adv
 
 
-# ──────────────────────────────────────────────
+
 # Evaluation helpers
-# ──────────────────────────────────────────────
 @torch.no_grad()
 def evaluate_clean(model, loader):
     model.eval()
@@ -200,9 +167,7 @@ def evaluate_pgd(model, loader, steps=20):
     return correct / total
 
 
-# ──────────────────────────────────────────────
-# Optimizer + LR — identical to Mark's
-# ──────────────────────────────────────────────
+# Optimizer + LR 
 optimizer = torch.optim.SGD(
     model.parameters(), lr=0.1, momentum=0.9,
     weight_decay=5e-4, nesterov=True,
@@ -218,9 +183,7 @@ def lr_lambda(epoch: int) -> float:
 
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
 
-# ──────────────────────────────────────────────
 # Training loop
-# ──────────────────────────────────────────────
 print(f"\n{'='*70}", flush=True)
 print(f"v6: Mark's recipe + checkpointing", flush=True)
 print(f"ResNet18 (pretrained) · TRADES β={BETA} · ε={EPSILON:.4f} · "
