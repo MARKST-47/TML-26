@@ -37,11 +37,11 @@ if device.type == "cuda":
 # Config — IDENTICAL to Mark's proven settings
 # ──────────────────────────────────────────────
 BATCH_SIZE = 256
-EPOCHS = 150           # Mark used 120; a bit more room
-BETA = 4.0             # Mark's value — proven
+EPOCHS = 200           # A bit more room
+BETA = 4.0             # Proven value
 EPSILON = 8 / 255
 STEP_SIZE = 2 / 255
-PGD_STEPS = 7          # Mark's value — proven
+PGD_STEPS = 7          # Proven value
 NUM_CLASSES = 9
 WARMUP_EPOCHS = 5
 LABEL_SMOOTHING = 0.1
