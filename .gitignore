@@ -1,4 +1,7 @@
 *.safetensors
 *.pth
 *.pt
-__pycache__/
+__pycache__/\
+# Data for task 4
+clean_targets/
+watermarked_sources/
