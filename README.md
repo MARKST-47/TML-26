@@ -9,6 +9,7 @@ This repository contains the projects and assignments for the **Trustworthy Mach
 | **Task 1** | Privacy: Membership Inference Attack (MIA) | ✅ Completed |
 | **Task 2** | Model Stealing: Stolen Model Detection     | ✅ Completed |
 | **Task 3** | Adversarial ML & Robustness                | ✅ Completed |
+| **Task 3** | Watermark Forgery Attack                   | Ongoing      |
 
 ---
 
@@ -73,6 +74,8 @@ To replicate our top-performing pipeline, please refer to the detailed [Task 3 R
 ## 🛡️ Task 4: Watermark Forgery Attack
 
 ### Overview
+
+The objective is to forge invisible watermarks onto clean target images such that they deceive an unknown server side detector while maintaining high perceptual fidelity. We are provided with a dataset containing 200 clean target images and multiple sets of watermarked source images across 8 distinct watermark families (WM1​ to WM8​). The core challenge lies in navigating the competitive trade-off between detection alignment (Sdet​) and structural preservation (Sqlt​) to maximize a balanced final score (Sfinal ​= Sdet ​× Sqlt​) under strict, non-linear distortion constraints.
 
 ### Key Methodology
 
