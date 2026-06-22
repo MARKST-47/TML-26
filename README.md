@@ -70,6 +70,16 @@ The objective is to train an adversarially robust model capable of defending aga
 
 To replicate our top-performing pipeline, please refer to the detailed [Task 3 README](./tml26_task3/README.md).
 
+## 🛡️ Task 4: Watermark Forgery Attack
+
+### Overview
+
+### Key Methodology
+
+### 🚀 Reproducibility
+
+To replicate our top-performing pipeline, please refer to the detailed [Task 4 README](./tml26_task4/README.md).
+
 ## ✍️ Team Information
 
 - **Team ID:** team034
