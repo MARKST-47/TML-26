@@ -38,18 +38,17 @@ scheme's actual message. We tackled each batch by its scheme type:
 
 **1. Classical schemes: identify decoder, recover message, re-embed.**
 
-- `WM_1` was identified as **dwtDct** (16-bit message) and `WM_2` as
-  **RivaGAN** (32-bit), both via the `imwatermark` library (`identify.py`).
-- For each, we decode all 25 sources, take the majority-vote message, and
-  **re-embed it** into the clean targets with the genuine encoder (`reembed.py`).
-  This reproduces the exact message bits (bit-accuracy 0.91 for WM_1, 0.99 for WM_2).
+- Through iterative probing with the `imwatermark` library (varying decoders and
+  bit-lengths), we identified `WM_1` as **dwtDct** (16-bit message) and `WM_2` as
+  **RivaGAN** (32-bit). For each, we decode all 25 sources, take the majority-vote
+  message, and re-embed into the clean targets with the genuine encoder.
 
 **2. SERUM-family pixel leak: fixed-pattern transplant.**
 
 - `WM_5` is a SERUM-style diffusion watermark whose fixed pattern partially
   **leaks into pixel space**. We extract it as the averaged edge-preserving
   residual over the 25 sources (`source − bilateral(source)`) and transplant it
-  onto the targets at strength β=2.0 (`serum_probe.py`, `serum_transplant.py`).
+  onto the targets at strength β=2.0.
 
 **3. Quality optimisation on cracked batches.**
 
@@ -61,10 +60,10 @@ scheme's actual message. We tackled each batch by its scheme type:
 
 - `WM_3, 4, 6, 7, 8` are latent/token-domain watermarks (see elimination below).
   They do not respond to pixel-space forging, so they receive a low-strength
-  averaged residual (α=0.4) to avoid quality loss.
+  averaged residual (α=0.4).
 
 **Systematic elimination of WM_3/4/6/7/8.** We ruled out, using a clean-target
-control for every probe: dwtDct, dwtDctSvd, RivaGAN (lengths 8–48), TrustMark
+control for every probe: dwtDct, dwtDctSvd, RivaGAN (various lengths), TrustMark
 (Q/P/B variants), blind-watermark, Tree-Ring FFT, LSB/bit-plane analysis, QIM
 quantization fingerprinting, block-DCT/Fourier-phase consistency, a split-half DCT
 filter (traced to selection artifact), a VGG-based learned surrogate, a pre-trained
@@ -79,11 +78,11 @@ token space and require model-specific trained detectors to forge.
 
 ## Leaderboard Progression
 
-| Build                    | Description                                          | Score     |
-| ------------------------ | ---------------------------------------------------- | --------- |
-| `forge_classical.py`     | WM_1/WM_2 re-embed; WM_3–8 avg α=0.5                | 0.423     |
-| `forge_classical_serum.py` | + WM_5 SERUM transplant β=1.0; avg α=0.4           | 0.457     |
-| `forge_final.py`         | + quality-blend WM_1(0.85)/WM_2(0.50); β=2.0        | **0.463** |
+| Build                      | Description                                          | Score     |
+| -------------------------- | ---------------------------------------------------- | --------- |
+| `forge_classical.py`       | WM_1/WM_2 re-embed; WM_3–8 avg α=0.5                | 0.423     |
+| `forge_classical_serum.py` | + WM_5 SERUM transplant β=1.0; avg α=0.4             | 0.457     |
+| `forge_final.py`           | + quality-blend WM_1(0.85)/WM_2(0.50); β=2.0        | **0.463** |
 
 ---
 
@@ -93,14 +92,20 @@ token space and require model-specific trained detectors to forge.
 forge_final.py             Best submission builder (0.463). Produces submission.zip.
 forge_classical_serum.py   Intermediate build: adds SERUM transplant (0.457).
 forge_classical.py         Initial build: classical re-embed only (0.423).
-identify.py                Scheme identification: probes decoders against each batch.
-reembed.py                 WM_1/WM_2 message recovery and re-embedding.
-serum_probe.py             Detects WM_5's fixed pixel-space pattern.
-serum_transplant.py        Extracts and transplants WM_5's watermark pattern.
+identify.py                Exploration: probes decoder/length combinations for scheme ID.
+reembed.py                 Exploration: standalone re-embedding test for WM_1.
+serum_probe.py             Exploration: SNR consistency test for fixed pixel-space patterns.
+serum_transplant.py        Exploration: transplant verification with correlation check.
 submission.py              Leaderboard submission script (API key not included).
 task_template.py           Course-provided target-mapping template.
 README.md                  This file.
 ```
+
+The `forge_*.py` scripts are self-contained end-to-end builders, each reads from
+`Dataset/`, produces all 200 forged images, and writes `submission.zip`. The
+exploration scripts (`identify.py`, `reembed.py`, `serum_probe.py`,
+`serum_transplant.py`) document the investigation process that led to the final
+approach; the final working parameters are consolidated in the forge builds.
 
 `Dataset/`, submission `.zip` files, and the Python environment are not tracked.
 
