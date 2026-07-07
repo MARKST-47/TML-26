@@ -1,7 +1,7 @@
 # Task 4: Watermark Forgery
 
 **CISPA Helmholtz Center for Information Security: Trustworthy Machine Learning, SS2026**
-Team `team_LXIV` (CMS team ID: `atml_team034`)
+## Team `team_LXIV` (CMS team ID: `atml_team034`)
 
 ---
 
@@ -92,10 +92,14 @@ token space and require model-specific trained detectors to forge.
 forge_final.py             Best submission builder (0.463). Produces submission.zip.
 forge_classical_serum.py   Intermediate build: adds SERUM transplant (0.457).
 forge_classical.py         Initial build: classical re-embed only (0.423).
-identify.py                Exploration: probes decoder/length combinations for scheme ID.
+identify.py                Exploration: probes dwtDct/dwtDctSvd decoder agreement.
 reembed.py                 Exploration: standalone re-embedding test for WM_1.
 serum_probe.py             Exploration: SNR consistency test for fixed pixel-space patterns.
 serum_transplant.py        Exploration: transplant verification with correlation check.
+classical_probe.py         Exploration: TrustMark probing on uncracked batches.
+bw_probe.py                Exploration: blind-watermark decoder sweep on WM_3-8.
+bitmark_run_detect.py      Exploration: BitMark z-score detection on all batches.
+quantloss_test.py          Exploration: QuantLoss provenance signal test.
 submission.py              Leaderboard submission script (API key not included).
 task_template.py           Course-provided target-mapping template.
 README.md                  This file.
