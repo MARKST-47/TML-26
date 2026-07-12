@@ -1,7 +1,7 @@
-# Task 4: Watermark Forgery Attack
+# Task 4: Watermark Forgery
 
 **CISPA Helmholtz Center for Information Security: Trustworthy Machine Learning, SS2026**
-Team `team_LXIV` (CMS team ID: `atml_team034`)
+## Team `team_LXIV` (CMS team ID: `atml_team034`)
 
 ---
 
@@ -24,80 +24,94 @@ Each source set maps to a fixed block of targets:
 **Scoring** (per image, then averaged):
 `S = S_det × S_qlt`, where
 `S_det = max(0, 2·(BitAccuracy − 0.5))` and `S_qlt = exp(−8·LPIPS)`.
-Because the score is a **product**, a batch must win _both_ detection and quality zero detection yields zero regardless of quality.
+Because the score is a **product**, a batch must win _both_ detection and quality, 
+zero detection yields zero regardless of quality.
 
 ---
 
-## Approach and Flow
+## Approach
 
 Our central finding: the detector grades the **decoded message bits**, not mere
-watermark presence. Naive averaging reproduces presence but not the message, and
-therefore plateaus. The only way to score is to reproduce each scheme's actual
-message. We tackled each batch by its scheme type:
+watermark presence. Naive averaging reproduces presence but not the message,
+capping the detection score near zero. The only way to score is to reproduce each
+scheme's actual message. We tackled each batch by its scheme type:
 
 **1. Classical schemes: identify decoder, recover message, re-embed.**
 
-- `WM_1` was identified as **dwtDct** (length-16 message) and `WM_2` as
-  **RivaGAN** (length-32), both via the `imwatermark` library.
-- For each, we decode all 25 sources, take the majority-vote message, and
-  **re-embed it** into the clean targets with the real encoder. This reproduces
-  the exact message bits (bit-accuracy 0.91 / 0.98).
+- Through iterative probing with the `imwatermark` library (varying decoders and
+  bit-lengths), we identified `WM_1` as **dwtDct** (16-bit message) and `WM_2` as
+  **RivaGAN** (32-bit). For each, we decode all 25 sources, take the majority-vote
+  message, and re-embed into the clean targets with the genuine encoder.
 
 **2. SERUM-family pixel leak: fixed-pattern transplant.**
 
 - `WM_5` is a SERUM-style diffusion watermark whose fixed pattern partially
   **leaks into pixel space**. We extract it as the averaged edge-preserving
   residual over the 25 sources (`source − bilateral(source)`) and transplant it
-  onto the targets — a WMCopier-style copy attack.
+  onto the targets at strength β=2.0.
 
-**3. Remaining batches: averaged residual baseline.**
+**3. Quality optimisation on cracked batches.**
 
-- `WM_3, 4, 6, 7, 8` are latent/token-domain watermarks (confirmed below). They do
-  not respond to pixel-space forging, so they receive the baseline averaged
-  residual at low strength to avoid quality loss.
+- Since re-embedded watermarks retain large detection margin, we blend each
+  watermarked image back toward clean: `f = α·w + (1−α)·c`. The product
+  `S_det × S_qlt` peaks at α=0.85 for WM_1 and α=0.50 for WM_2.
 
-**Why the rest could not be forged (systematic elimination).** We ruled out, for
-`WM_3/4/6/7/8`: dwtDct, dwtDctSvd, RivaGAN, blind-watermark, Tree-Ring FFT,
-LSB/bit-plane, TrustMark, a trained CNN surrogate, and a latent-space probe with a
-standard SD VAE. Per the SERUM paper (Kociszewski et al., ICLR'26), detection
-requires the model's **trained detector** operating in the LDM latent space, an
-artifact not recoverable from 25 sample images, which is consistent with all of
-our negative results.
+**4. Remaining batches: averaged residual baseline.**
 
----
+- `WM_3, 4, 6, 7, 8` are latent/token-domain watermarks (see elimination below).
+  They do not respond to pixel-space forging, so they receive a low-strength
+  averaged residual (α=0.4).
 
-## Performance Log
-
-| Build                       | Method added                       | Leaderboard |
-| --------------------------- | ---------------------------------- | ----------- |
-| naive blend                 | global average blend               | 0.159       |
-| averaging                   | mean residual, all batches         | 0.189       |
-| + WM_1 re-embed             | dwtDct message recovery            | 0.192       |
-| + WM_2 re-embed             | RivaGAN message recovery           | 0.327       |
-| low-alpha averaging         | tuned residual strength            | 0.423       |
-| **+ WM_5 SERUM transplant** | **fixed-pattern pixel transplant** | **0.457**   |
-
-Final: **0.457** (rank ~6). WM_1, WM_2, and WM_5 carry the detectable signal;
-the remaining batches contribute baseline quality only.
+**Systematic elimination of WM_3/4/6/7/8.** We ruled out, using a clean-target
+control for every probe: dwtDct, dwtDctSvd, RivaGAN (various lengths), TrustMark
+(Q/P/B variants), blind-watermark, Tree-Ring FFT, LSB/bit-plane analysis, QIM
+quantization fingerprinting, block-DCT/Fourier-phase consistency, a split-half DCT
+filter (traced to selection artifact), a VGG-based learned surrogate, a pre-trained
+ConvNeXt watermark forger (Meta WmForger, scored ~0.46 but wrong watermark family),
+latent-space probes with a Stable-Diffusion VAE, BitMark detection (official code,
+Infinity tokeniser, z-scores near zero), and QuantLoss provenance detection
+(LlamaGen tokeniser, no gap between sources and clean targets). These consistent
+negatives indicate the remaining watermarks live in a generative model's latent or
+token space and require model-specific trained detectors to forge.
 
 ---
 
-## Directory Structure
+## Leaderboard Progression
+
+| Build                      | Description                                          | Score     |
+| -------------------------- | ---------------------------------------------------- | --------- |
+| `forge_classical.py`       | WM_1/WM_2 re-embed; WM_3–8 avg α=0.5                | 0.423     |
+| `forge_classical_serum.py` | + WM_5 SERUM transplant β=1.0; avg α=0.4             | 0.457     |
+| `forge_final.py`           | + quality-blend WM_1(0.85)/WM_2(0.50); β=2.0        | **0.463** |
+
+---
+
+## Repository Structure
 
 ```
-build_hybrid5.py     Best submission builder (0.457). Produces submission.zip.
-identify.py          Scheme identification: probes decoders against each batch.
-reembed.py           WM_1/WM_2 message recovery and re-embedding.
-serum_probe.py       Detects WM_5's fixed pixel-space pattern (SNR test).
-serum_transplant.py  Extracts and transplants WM_5's watermark with verification.
-classical_probe.py   Rules out TrustMark across the uncracked batches.
-latent_probe.py      Latent-space (SD VAE) diagnostic for SERUM-family batches.
-task_template.py     Course-provided target-mapping template.
-README.md            This file.
+forge_final.py             Best submission builder (0.463). Produces submission.zip.
+forge_classical_serum.py   Intermediate build: adds SERUM transplant (0.457).
+forge_classical.py         Initial build: classical re-embed only (0.423).
+identify.py                Exploration: probes dwtDct/dwtDctSvd decoder agreement.
+reembed.py                 Exploration: standalone re-embedding test for WM_1.
+serum_probe.py             Exploration: SNR consistency test for fixed pixel-space patterns.
+serum_transplant.py        Exploration: transplant verification with correlation check.
+classical_probe.py         Exploration: TrustMark probing on uncracked batches.
+bw_probe.py                Exploration: blind-watermark decoder sweep on WM_3-8.
+bitmark_run_detect.py      Exploration: BitMark z-score detection on all batches.
+quantloss_test.py          Exploration: QuantLoss provenance signal test.
+submission.py              Leaderboard submission script (API key not included).
+task_template.py           Course-provided target-mapping template.
+README.md                  This file.
 ```
 
-_Note:_ `Dataset/`, the submission `.zip` files, and the local Python environment
-are intentionally not tracked (see `.gitignore`).
+The `forge_*.py` scripts are self-contained end-to-end builders, each reads from
+`Dataset/`, produces all 200 forged images, and writes `submission.zip`. The
+exploration scripts (`identify.py`, `reembed.py`, `serum_probe.py`,
+`serum_transplant.py`) document the investigation process that led to the final
+approach; the final working parameters are consolidated in the forge builds.
+
+`Dataset/`, submission `.zip` files, and the Python environment are not tracked.
 
 ---
 
@@ -110,24 +124,31 @@ pip install numpy pillow opencv-python-headless imwatermark onnxruntime
 ```
 
 **2. Data layout.** Place the provided dataset in a `Dataset/` folder beside the
-scripts, with this structure:
+scripts:
 
 ```
 Dataset/
-├── clean_targets/        (1.png … 200.png)
+├── clean_targets/           (1.png … 200.png)
 └── watermarked_sources/
-    ├── WM_1/ … WM_8/      (25 images each)
+    ├── WM_1/ … WM_8/        (25 images each)
 ```
 
-**3. Build the submission.** From the repository root:
+**3. Build the submission.**
 
 ```bash
-python build_hybrid5.py
+python forge_final.py
 ```
 
 This reads from `Dataset/`, writes forged images to `submission_temp/`, and
-produces **`submission.zip`** (200 images) in the repository root: ready for
-leaderboard upload.
+produces `submission.zip` (200 images) ready for leaderboard upload.
+
+**4. Submit to leaderboard.**
+
+```bash
+python submission.py
+```
+
+Set your API key in `submission.py` before running.
 
 All paths are relative to the repository root; no absolute paths or
 environment-specific configuration are required.
