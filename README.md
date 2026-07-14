@@ -35,7 +35,7 @@ For specific instructions on how to recreate our best leaderboard result, please
 
 The goal of this task is to protect intellectual property by detecting stolen versions of a victim model among **360 suspect verification candidates**. The evaluation framework evaluates defenses against varied adversary actions, including direct checkpoint replication, heavy post-theft fine-tuning, and black-box dataset distillation/extraction. The final scoring metric evaluates the system's **True Positive Rate at a strict 5% False Positive Rate threshold (TPR@FPR=0.05)**.
 
-### Key Methodology & Multi-Signal Architecture
+### Key Methodology
 
 Our production framework (`v2`) operates a calibrated ensemble across 9 distinct structural and behavioral signals to handle variations in model forgery:
 
