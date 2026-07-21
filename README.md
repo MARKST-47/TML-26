@@ -79,7 +79,7 @@ The objective is to forge invisible watermarks onto clean target images such tha
 
 ### Key Methodology
 
-To break through the architectural limits of spatial-domain attacks, we transitioned from flat pixel-level averages to a **Multi-Domain Steganographic Alignment** framework. Our approach maps each watermark family directly to its specific embedding domain while enforcing strict amplitude calibration bounds to maximize the joint extraction-distortion objective:
+To break through the architectural limits of spatial domain attacks, we transitioned from flat pixel-level averages to a **Multi-Domain Steganographic Alignment** framework. Our approach maps each watermark family directly to its specific embedding domain while enforcing strict amplitude calibration bounds to maximize the joint extraction-distortion objective:
 
 - **Cryptographic Bit-Plane Reconstruction (WM_1, WM_2):** Extracts exact watermark bit messages through population-wide majority voting (`dwtDct` 16-bit for WM_1; `RivaGAN` 32-bit for WM_2). We apply native library encoders to re-embed the tokens into clean targets, then surgically blend them back toward the pristine frames (**alpha_WM1 = 0.85**, **alpha_WM2 = 0.50**) to minimize the LPIPS penalty without losing detection margin.
 - **Joint Integer RGB Space Solver (WM_5):** Identifies a critical leak where floating-point chrominance adjustments (Cb and Cr) are entirely destroyed by float-to-uint8 rounding during PNG serialization. We resolve this by implementing a joint spatial integer solver that scales channel residuals alongside binary LSB bit-plane injections, pre-calculating integer coordinate adjustments directly in the target disk domain.
